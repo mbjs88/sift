@@ -1,0 +1,28 @@
+# Sift — nightly drain worker (separate from the app Worker on purpose).
+#
+# This is the ONLY place a Supabase service-role key lives. It runs unattended,
+# so it can't use a short-lived user JWT; instead it uses the service role to
+# process queued ingestion_jobs across the account, bypassing RLS by design.
+# The service-role key is a SECRET — set it with `wrangler secret put`, never
+# commit it. The app Worker still has no service-role key.
+#
+# Deploy from this folder:  cd workers/cron && npx wrangler deploy
+# Secrets to set (once):     SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, CRON_TRIGGER_KEY
+
+name = "sift-cron"
+main = "src/index.ts"
+compatibility_date = "2026-05-07"
+compatibility_flags = ["nodejs_compat"]
+
+# 03:00 UTC every day. Adjust to your timezone if you like (this is a cron in UTC).
+[triggers]
+crons = ["0 3 * * *"]
+
+# Public, non-secret config (same project the app uses).
+[vars]
+SUPABASE_URL = "https://imyovoyxicefnoihhczp.supabase.co"
+EMBEDDING_MODEL = "gemini-embedding-001"
+GENERATION_MODEL = "gemini-2.5-flash"
+# How many recipes to process per nightly run. Keep under the Gemini free-tier
+# daily allowance. Raise once you know your real headroom.
+PER_RUN = "30"

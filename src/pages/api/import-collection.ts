@@ -25,7 +25,9 @@ export const POST: APIRoute = async ({ request }) => {
   const accountId = await resolveActiveAccount(supa);
   if (!accountId) return json({ error: 'no_account' }, 409);
 
-  const body = (await request.json().catch(() => ({}))) as { url?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    url?: string; dryRun?: boolean; limit?: number;
+  };
   const url = typeof body.url === 'string' ? body.url.trim() : '';
   if (!url || !/^https?:\/\//i.test(url)) return json({ error: 'bad_url' }, 400);
 
@@ -43,8 +45,24 @@ export const POST: APIRoute = async ({ request }) => {
     .neq('status', 'failed');
   const taken = new Set((existingRows ?? []).map((r) => r.url as string));
 
-  const fresh = urls.filter((u) => !taken.has(u));
+  let fresh = urls.filter((u) => !taken.has(u));
   const skipped = urls.length - fresh.length;
+
+  // Preview: report what we'd do WITHOUT queuing anything, plus a sample so the
+  // user can sanity-check that these are really the recipes they want.
+  if (body.dryRun) {
+    return json({
+      discovered: urls.length,
+      newCount: fresh.length,
+      skipped,
+      via,
+      sample: fresh.slice(0, 8).map(labelOf),
+    }, 200);
+  }
+
+  // Honour an explicit cap so the user controls how many get in (e.g. "first 50").
+  const limit = Number.isFinite(body.limit) ? Math.max(0, Math.floor(body.limit as number)) : undefined;
+  if (limit !== undefined) fresh = fresh.slice(0, limit);
 
   // Bulk insert as 'queued' in chunks (PostgREST handles arrays fine, but keep
   // each request modest).
@@ -61,6 +79,16 @@ export const POST: APIRoute = async ({ request }) => {
 
   return json({ discovered: urls.length, queued, skipped, via }, 200);
 };
+
+// "…/blogs/recipes/7-hour-slow-cooked-lamb-shoulder" → "7 hour slow cooked lamb shoulder"
+function labelOf(url: string): string {
+  try {
+    const slug = new URL(url).pathname.split('/').filter(Boolean).pop() ?? url;
+    return slug.replace(/[-_]+/g, ' ').trim();
+  } catch {
+    return url;
+  }
+}
 
 function json(payload: unknown, status: number): Response {
   return new Response(JSON.stringify(payload), {
