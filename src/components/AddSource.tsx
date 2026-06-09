@@ -76,7 +76,7 @@ export default function AddSource() {
   // We read `error` too, so a failed job shows the REAL reason, not a guess.
   async function pollJob(jobId: string) {
     const supa = browserSupabase();
-    const deadline = Date.now() + 120_000;
+    const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
       await sleep(2500);
       const { data } = await supa
@@ -185,6 +185,8 @@ function failureMessage(error?: string | null): string {
       return `Sift’s AI key was rejected (${code}). Check GEMINI_API_KEY is set on the Worker. (${trim(error)})`;
     }
     if (code === '429') return 'AI rate limit hit — try again in a minute.';
+    if (code === '504') return 'The AI took too long (likely a long video) — try a shorter source.';
+    if (code === '503') return 'Couldn’t reach the AI service — check your connection and retry.';
   }
   return `Failed: ${trim(error)}`;
 }

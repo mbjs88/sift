@@ -109,12 +109,33 @@ async function generate(
   return text as string;
 }
 
+// Hard ceiling per call. Without this, a hung Gemini request (e.g. a YouTube
+// video that never finishes processing on the free tier) leaves the ingestion
+// job non-terminal forever — the UI just spins on "Still processing". A timeout
+// turns that into a clean, terminal failure the poller can surface.
+const REQUEST_TIMEOUT_MS = 90_000;
+
 async function postJson(url: string, body: unknown): Promise<any> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    // AbortError (timeout) or a network failure — both retryable-ish, but treat
+    // as a 504 so the job fails cleanly instead of hanging.
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new LlmError(504, `request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+    }
+    throw new LlmError(503, `network error: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     // 4xx (bad/private video, bad key) is permanent; 429/5xx is retryable.
