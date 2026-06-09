@@ -22,14 +22,22 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
     <title>Sift — Synthesis</title>
   </head>
   <body>
-    <main class="min-h-dvh flex flex-col items-center gap-12 px-6 py-16">
+    <header class="w-full max-w-2xl mx-auto flex items-center justify-between px-6 pt-6">
       <a href="/" class="text-2xl tracking-tight" style="font-weight:200">Sift</a>
+      <button
+        id="signout"
+        class="text-sm text-[color:var(--color-ink-soft)] underline-offset-4 hover:underline transition-transform active:scale-95"
+      >
+        Log out
+      </button>
+    </header>
+    <main class="min-h-dvh flex flex-col items-center gap-12 px-6 pt-10 pb-16">
       <AddSource client:only="react" />
       <SynthesisApp client:only="react" />
     </main>
 
     <script>
-      import { bootstrapAuth } from '../lib/authClient';
+      import { bootstrapAuth, signOut } from '../lib/authClient';
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -42,6 +50,12 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
       // No session -> back to the sign-in gate.
       bootstrapAuth().then((signedIn) => {
         if (!signedIn) window.location.replace('/');
+      });
+
+      // Log out: clear the Supabase session + token cookie, return to the gate.
+      document.getElementById('signout')?.addEventListener('click', async () => {
+        await signOut();
+        window.location.replace('/');
       });
     </script>
   </body>

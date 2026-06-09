@@ -4,6 +4,9 @@
 // then watch the ingestion_jobs row move queued -> scraping -> extracting ->
 // done under the caller's RLS.
 //
+// Visually this is deliberately NOT the Sift search bar: a dashed "intake" card
+// with an ember accent, so adding knowledge reads differently from querying it.
+//
 // Mounted client:only — it reads the browser session the shell already seeded.
 
 import { useState } from 'react';
@@ -70,14 +73,15 @@ export default function AddSource() {
   }
 
   // Watch the job row (RLS-scoped to the caller's account) until it resolves.
+  // We read `error` too, so a failed job shows the REAL reason, not a guess.
   async function pollJob(jobId: string) {
     const supa = browserSupabase();
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       await sleep(2500);
       const { data } = await supa
         .from('ingestion_jobs')
-        .select('status')
+        .select('status, error')
         .eq('id', jobId)
         .single();
       const s = data?.status as string | undefined;
@@ -88,7 +92,7 @@ export default function AddSource() {
       }
       if (s === 'failed') {
         setPhase('failed');
-        setNote('Couldn’t process that link.');
+        setNote(failureMessage(data?.error as string | null | undefined));
         return;
       }
       if (s) setNote(labelFor(s));
@@ -99,31 +103,46 @@ export default function AddSource() {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-2">
-      <div className="flex items-center gap-2 rounded-2xl border border-[color:var(--color-stone-warm)] bg-[color:var(--color-flour)] px-4 py-3 shadow-sm">
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
-          inputMode="url"
-          autoComplete="off"
-          placeholder="Paste a recipe or video link to add it…"
-          className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)]"
-        />
-        <button
-          onClick={add}
-          disabled={busy}
-          className="rounded-xl bg-[color:var(--color-ink)] text-[color:var(--color-flour)] px-4 py-1.5 text-sm transition-transform active:scale-95 disabled:opacity-40"
-        >
-          {busy ? 'Adding…' : 'Add'}
-        </button>
+    <div className="w-full max-w-2xl mx-auto">
+      <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-[color:var(--color-ember)]/50 bg-[color:var(--color-linen)] px-4 py-4">
+        <div className="flex items-center gap-2 text-sm text-[color:var(--color-ink-soft)]">
+          <span
+            className="grid place-items-center w-5 h-5 rounded-full text-[color:var(--color-flour)] text-base leading-none"
+            style={{ background: 'var(--color-ember)' }}
+            aria-hidden="true"
+          >
+            +
+          </span>
+          <span className="uppercase tracking-wide text-xs">Add a source</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+            inputMode="url"
+            autoComplete="off"
+            placeholder="Paste a recipe or YouTube link…"
+            className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)]"
+          />
+          <button
+            onClick={add}
+            disabled={busy}
+            className="rounded-xl px-4 py-1.5 text-sm text-[color:var(--color-flour)] transition-transform active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--color-ember)' }}
+          >
+            {busy ? 'Adding…' : 'Add'}
+          </button>
+        </div>
       </div>
+
       {note && (
         <p
           className={
-            'text-sm text-center ' +
+            'mt-2 text-sm text-center ' +
             (phase === 'failed'
-              ? 'text-[color:var(--color-ember,#c2683f)]'
+              ? 'text-[color:var(--color-ember)]'
               : 'text-[color:var(--color-ink-soft)]')
           }
         >
@@ -151,6 +170,26 @@ function labelFor(status: string): string {
     default: return 'Working…';
   }
 }
+
+// Translate the job's raw error into something legible, but keep the underlying
+// detail visible — it's the only diagnostic the user can read back to us.
+function failureMessage(error?: string | null): string {
+  if (!error) return 'Couldn’t process that link.';
+  if (error.startsWith('daily_quota_exhausted')) {
+    return 'Daily AI quota reached — try again tomorrow.';
+  }
+  const m = error.match(/^(\d{3})\b/);
+  if (m) {
+    const code = m[1];
+    if (code === '400' || code === '403') {
+      return `Sift’s AI key was rejected (${code}). Check GEMINI_API_KEY is set on the Worker. (${trim(error)})`;
+    }
+    if (code === '429') return 'AI rate limit hit — try again in a minute.';
+  }
+  return `Failed: ${trim(error)}`;
+}
+
+const trim = (s: string) => (s.length > 160 ? s.slice(0, 160) + '…' : s);
 
 function messageFor(code?: string): string {
   switch (code) {
