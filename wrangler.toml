@@ -1,0 +1,32 @@
+# Sift — Cloudflare Workers configuration
+# Astro 6 + @astrojs/cloudflare v13 deploy as a SINGLE Worker that serves
+# prerendered assets and runs the SSR /api endpoints. Ingestion runs inline in
+# /api/ingest via ctx.waitUntil() (no Cloudflare Queue), so the whole app fits
+# the free plan. There is no separate consumer Worker and no service-role key.
+
+name = "sift"
+main = "./dist/_worker.js/index.js"
+compatibility_date = "2026-05-07"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets emitted by `astro build`.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# ---------------------------------------------------------------------------
+# Non-secret environment bindings
+# ---------------------------------------------------------------------------
+[vars]
+SUPABASE_URL = "https://imyovoyxicefnoihhczp.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_CpVMj72zQ5gev5kEDe5zmw_kHfgR7oW"
+LLM_PROVIDER = "gemini"
+EMBEDDING_MODEL = "gemini-embedding-001"
+GENERATION_MODEL = "gemini-2.5-flash"
+
+# ---------------------------------------------------------------------------
+# Secrets — DO NOT put these in [vars]. Set out-of-band:
+#   wrangler secret put GEMINI_API_KEY
+# The app uses the ANON key + the signed-in user's JWT, so RLS is enforced on
+# every read AND write. No service-role key exists in this project.
+# ---------------------------------------------------------------------------

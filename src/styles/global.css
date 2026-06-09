@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* "Calm Interface" / "Resonant Stark" palette — warm linen, unbleached flour,
+   stone. Defined as theme tokens so components reference intent, not hex. */
+@theme {
+  --color-linen: #f5f1ea;
+  --color-flour: #faf7f1;
+  --color-stone-warm: #d9d2c5;
+  --color-ink: #2b2722;
+  --color-ink-soft: #6b6459;
+  --font-weight-hair: 200;
+}
+
+html, body {
+  background-color: var(--color-linen);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

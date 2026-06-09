@@ -1,0 +1,55 @@
+---
+// Phase 0 shell. The unobtrusive entry: a single sign-in affordance now,
+// the synthesis search bar and knowledge graph land in Step 5.
+// Marked prerender so the landing shell is static; auth + RAG routes are SSR.
+export const prerender = true;
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e9e2d6" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Sift</title>
+  </head>
+  <body>
+    <main class="min-h-dvh flex flex-col items-center justify-center gap-10 px-6">
+      <h1 class="text-5xl tracking-tight" style="font-weight:200">Sift</h1>
+      <p class="text-[color:var(--color-ink-soft)] max-w-sm text-center text-balance">
+        Don't read it. Sift it.
+      </p>
+      <button
+        id="signin"
+        class="rounded-2xl bg-[color:var(--color-flour)] border border-[color:var(--color-stone-warm)] px-6 py-3 text-sm shadow-sm transition-transform active:scale-95"
+      >
+        Sign in with Google
+      </button>
+    </main>
+
+    <script>
+      import { bootstrapAuth, signInWithGoogle } from '../lib/authClient';
+
+      // Register the service worker so the app is installable and the
+      // share_target is honoured by the OS.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+
+      const btn = document.getElementById('signin') as HTMLButtonElement | null;
+
+      // Already signed in? Skip the gate and go straight to the workspace.
+      bootstrapAuth().then((signedIn) => {
+        if (signedIn) {
+          window.location.replace('/app');
+        } else if (btn) {
+          btn.addEventListener('click', () => signInWithGoogle('/app'));
+        }
+      });
+    </script>
+  </body>
+</html>

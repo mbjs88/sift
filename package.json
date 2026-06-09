@@ -1,0 +1,36 @@
+{
+  "name": "sift-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.5.0",
+    "@astrojs/react": "^4.4.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "astro": "^6.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-force-graph-2d": "^1.27.0",
+    "marked": "^14.1.0",
+    "tailwindcss": "^4.1.0",
+    "@supabase/supabase-js": "^2.49.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260507.0",
+    "@tailwindcss/typography": "^0.5.15",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
