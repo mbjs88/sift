@@ -5,7 +5,12 @@
 # the free plan. There is no separate consumer Worker and no service-role key.
 
 name = "sift"
-main = "./dist/_worker.js/index.js"
+# Astro 6 + @astrojs/cloudflare v13: `main` is a PACKAGE EXPORT, not a built
+# file path. The Cloudflare vite plugin resolves this entrypoint for both
+# `astro dev` and production, and (unlike a *.js path) it is NOT existence-
+# checked at config time — so the build no longer fails before `astro build`
+# has written the worker.
+main = "@astrojs/cloudflare/entrypoints/server"
 compatibility_date = "2026-05-07"
 compatibility_flags = ["nodejs_compat"]
 

@@ -12,6 +12,10 @@
 // caller's RLS via the user client. The UI polls the job row for status.
 
 import type { APIRoute } from 'astro';
+// Astro 6 removed Astro.locals.runtime. Bindings (vars + secrets) now come from
+// the `cloudflare:workers` module; the ExecutionContext (waitUntil) lives on
+// Astro.locals.cfContext.
+import { env } from 'cloudflare:workers';
 import { firstUrlIn } from '../../lib/url';
 import {
   userClient, bearerFromRequest, resolveActiveAccount,
@@ -27,7 +31,6 @@ interface ShareInput {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const input = await readShareInput(request);
   const wantsJson = expectsJson(request);
 
@@ -79,7 +82,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // the share sheet — returns now. waitUntil keeps the Worker running until the
   // pipeline resolves. The pipeline owns all its own error handling.
   const work = runIngestion(supa, env, { jobId: jobRow.id, accountId, userId, url });
-  locals.runtime.ctx.waitUntil(work);
+  locals.cfContext.waitUntil(work);
 
   return wantsJson
     ? json({ jobId: jobRow.id, status: 'processing' }, 202)

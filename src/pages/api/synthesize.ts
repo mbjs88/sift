@@ -12,6 +12,8 @@
 // in the SQL function (SECURITY INVOKER); this endpoint just passes the token.
 
 import type { APIRoute } from 'astro';
+// Astro 6: bindings come from `cloudflare:workers`, not Astro.locals.runtime.
+import { env } from 'cloudflare:workers';
 import { createRouter } from '../../lib/llmRouter';
 import {
   userClient, bearerFromRequest, resolveActiveAccount,
@@ -30,8 +32,6 @@ interface SynthInput {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
-
   const body = await request.json().catch(() => null) as Partial<SynthInput> | null;
   const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
   const mode: SynthesisMode = body?.mode === 'pantry' ? 'pantry' : 'synthesis';
