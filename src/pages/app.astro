@@ -5,6 +5,7 @@
 // finds no session.
 export const prerender = true;
 import '../styles/global.css';
+import AddSource from '../components/AddSource.tsx';
 import SynthesisApp from '../components/SynthesisApp.tsx';
 ---
 
@@ -23,6 +24,7 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
   <body>
     <main class="min-h-dvh flex flex-col items-center gap-12 px-6 py-16">
       <a href="/" class="text-2xl tracking-tight" style="font-weight:200">Sift</a>
+      <AddSource client:only="react" />
       <SynthesisApp client:only="react" />
     </main>
 
