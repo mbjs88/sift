@@ -73,9 +73,21 @@ export default function AddSource() {
         },
         body: JSON.stringify({ url: link }),
       });
-      const body = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        jobId?: string; error?: string; duplicate?: boolean; status?: string;
+      };
       if (!res.ok || !body.jobId) {
         patch(id, { phase: 'failed', note: messageFor(body.error) });
+        return;
+      }
+      // Already saved (or already in flight) — don't re-add, just say so.
+      if (body.duplicate) {
+        if (body.status === 'done') {
+          patch(id, { phase: 'done', note: 'Already in your library.' });
+        } else {
+          patch(id, { phase: 'working', note: 'Already being added…' });
+          void pollJob(id, body.jobId);
+        }
         return;
       }
       patch(id, { phase: 'working', note: 'Reading…' });
@@ -116,16 +128,19 @@ export default function AddSource() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-[color:var(--color-ember)]/50 bg-[color:var(--color-linen)] px-4 py-4">
+      <div
+        className="glass flex flex-col gap-3 px-4 py-4"
+        style={{ boxShadow: 'var(--glass-shadow), inset 0 0 0 1px rgba(194,104,63,0.18)' }}
+      >
         <div className="flex items-center gap-2 text-sm text-[color:var(--color-ink-soft)]">
           <span
-            className="grid place-items-center w-5 h-5 rounded-full text-[color:var(--color-flour)] text-base leading-none"
+            className="grid place-items-center w-5 h-5 rounded-full text-white text-base leading-none shadow-sm"
             style={{ background: 'var(--color-ember)' }}
             aria-hidden="true"
           >
             +
           </span>
-          <span className="uppercase tracking-wide text-xs">Add a source</span>
+          <span className="uppercase tracking-[0.14em] text-xs">Add a source</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -136,11 +151,11 @@ export default function AddSource() {
             inputMode="url"
             autoComplete="off"
             placeholder="Paste a recipe or YouTube link…"
-            className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)]"
+            className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)] text-[15px]"
           />
           <button
             onClick={add}
-            className="rounded-xl px-4 py-1.5 text-sm text-[color:var(--color-flour)] transition-transform active:scale-95"
+            className="rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-transform active:scale-95"
             style={{ background: 'var(--color-ember)' }}
           >
             Add
@@ -170,7 +185,7 @@ function SourceRow({ item, onDismiss }: { item: Item; onDismiss: () => void }) {
   const pct = progressFor(item.phase);
 
   return (
-    <li className="rounded-xl border border-[color:var(--color-stone-warm)] bg-[color:var(--color-flour)] px-3 py-2">
+    <li className="rounded-2xl border glass-hairline bg-[color:var(--glass-bg)] px-3 py-2.5 rise">
       <div className="flex items-center gap-3">
         <span className="flex-1 min-w-0 truncate text-sm text-[color:var(--color-ink)]" title={item.url}>
           {item.label}

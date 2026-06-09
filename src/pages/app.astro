@@ -6,6 +6,7 @@
 export const prerender = true;
 import '../styles/global.css';
 import AddSource from '../components/AddSource.tsx';
+import LibraryGraph from '../components/LibraryGraph.tsx';
 import SynthesisApp from '../components/SynthesisApp.tsx';
 ---
 
@@ -14,7 +15,8 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#e9e2d6" />
+    <meta name="theme-color" content="#efe8dc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131019" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -22,18 +24,42 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
     <title>Sift — Synthesis</title>
   </head>
   <body>
-    <header class="w-full max-w-2xl mx-auto flex items-center justify-between px-6 pt-6">
-      <a href="/" class="text-2xl tracking-tight" style="font-weight:200">Sift</a>
-      <button
-        id="signout"
-        class="text-sm text-[color:var(--color-ink-soft)] underline-offset-4 hover:underline transition-transform active:scale-95"
-      >
-        Log out
-      </button>
-    </header>
-    <main class="min-h-dvh flex flex-col items-center gap-12 px-6 pt-10 pb-16">
-      <AddSource client:only="react" />
-      <SynthesisApp client:only="react" />
+    <!-- living glass backdrop -->
+    <div class="app-bg" aria-hidden="true"><div class="lift"></div></div>
+
+    <div class="sticky top-0 z-20 px-4 pt-4">
+      <header class="glass glass-hairline w-full max-w-2xl mx-auto flex items-center justify-between pl-5 pr-3 py-2.5" style="border-radius:9999px">
+        <a href="/" class="flex items-baseline gap-1.5 select-none">
+          <span class="text-xl tracking-[-0.04em]" style="font-weight:600">Sift</span>
+          <span class="w-1.5 h-1.5 rounded-full mb-0.5" style="background:var(--color-ember)"></span>
+        </a>
+        <button
+          id="signout"
+          class="text-sm text-[color:var(--color-ink-soft)] px-3 py-1.5 rounded-full hover:bg-[color:var(--glass-hairline)] transition-colors active:scale-95"
+        >
+          Log out
+        </button>
+      </header>
+    </div>
+
+    <main class="min-h-dvh flex flex-col items-center gap-10 px-4 pt-10 pb-20">
+      <div class="w-full max-w-2xl mx-auto text-center rise">
+        <h1 class="text-3xl sm:text-4xl tracking-[-0.03em]" style="font-weight:600">
+          Your kitchen, distilled.
+        </h1>
+        <p class="mt-2 text-[color:var(--color-ink-soft)]">
+          Save anything. Sift turns it into knowledge you can actually cook from.
+        </p>
+      </div>
+      <div class="w-full rise" style="animation-delay:.05s">
+        <AddSource client:only="react" />
+      </div>
+      <div class="w-full rise" style="animation-delay:.1s">
+        <LibraryGraph client:only="react" />
+      </div>
+      <div class="w-full rise" style="animation-delay:.15s">
+        <SynthesisApp client:only="react" />
+      </div>
     </main>
 
     <script>

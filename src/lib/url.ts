@@ -28,6 +28,25 @@ export function normalizeYouTube(raw: string): string {
   return `https://www.youtube.com/watch?v=${id}`;
 }
 
+// A stable key for "is this the same source?" so the same link can't be saved
+// twice. YouTube collapses to the canonical watch URL; articles drop tracking
+// query params, the hash, and a trailing slash, and lower-case the host. We
+// store AND ingest this cleaned URL, so dedup stays simple downstream.
+export function canonicalUrl(raw: string): string {
+  try {
+    if (classifyUrl(raw) === 'youtube') return normalizeYouTube(raw);
+    const u = new URL(raw);
+    u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
+    u.search = '';
+    u.hash = '';
+    let s = u.toString();
+    if (s.endsWith('/')) s = s.slice(0, -1);
+    return s;
+  } catch {
+    return raw.trim();
+  }
+}
+
 // Android share sheets often deliver the link inside `text`, not `url`.
 // Pull the first http(s) URL out of an arbitrary shared string.
 export function firstUrlIn(text: string | null | undefined): string | null {

@@ -16,7 +16,7 @@ import type { APIRoute } from 'astro';
 // the `cloudflare:workers` module; the ExecutionContext (waitUntil) lives on
 // Astro.locals.cfContext.
 import { env } from 'cloudflare:workers';
-import { firstUrlIn } from '../../lib/url';
+import { firstUrlIn, canonicalUrl } from '../../lib/url';
 import {
   userClient, bearerFromRequest, resolveActiveAccount,
 } from '../../lib/supabaseUser';
@@ -35,12 +35,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const wantsJson = expectsJson(request);
 
   // Android often delivers the link inside `text` rather than `url`.
-  const url = input.url ?? firstUrlIn(input.text) ?? firstUrlIn(input.title);
-  if (!url) {
+  const rawUrl = input.url ?? firstUrlIn(input.text) ?? firstUrlIn(input.title);
+  if (!rawUrl) {
     return wantsJson
       ? json({ error: 'no_url', message: 'No shareable URL found in request.' }, 400)
       : redirect('/?ingest=no_url');
   }
+  // Canonicalise so the same link can't be saved twice (and so we ingest the
+  // clean URL, not one carrying tracking params).
+  const url = canonicalUrl(rawUrl);
 
   const token = bearerFromRequest(request);
   if (!token) {
@@ -63,6 +66,33 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return wantsJson
       ? json({ error: 'no_account', message: 'No account to save into.' }, 409)
       : redirect('/?ingest=no_account');
+  }
+
+  // Dedup: if this exact source already has a job that succeeded or is still
+  // running for this account, don't add it again. (Failed jobs are allowed to
+  // retry.) The canonical URL makes this robust against tracking-param noise.
+  const { data: existing } = await supa
+    .from('ingestion_jobs')
+    .select('id, status')
+    .eq('account_id', accountId)
+    .eq('url', url)
+    .neq('status', 'failed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    const already = existing.status === 'done';
+    return wantsJson
+      ? json(
+          {
+            jobId: existing.id,
+            status: existing.status,
+            duplicate: true,
+            message: already ? 'Already in your library.' : 'Already being added.',
+          },
+          200,
+        )
+      : redirect(`/?ingest=${already ? 'duplicate' : 'processing'}`);
   }
 
   // Record the job (created_by = caller) under RLS. This row is the status the

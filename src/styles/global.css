@@ -1,21 +1,200 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* "Calm Interface" / "Resonant Stark" palette — warm linen, unbleached flour,
-   stone. Defined as theme tokens so components reference intent, not hex. */
+/* ───────────────────────────────────────────────────────────────────────────
+   Sift — "Liquid Glass" design system.
+   Adaptive light/dark via prefers-color-scheme. Components reference semantic
+   tokens (--color-ink, --color-ember, --glass-*) so re-theming is one place.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 @theme {
-  --color-linen: #f5f1ea;
+  /* Kept so Tailwind knows these utilities exist; live values are set in :root
+     below (and overridden for dark), which is what var() resolves at runtime. */
+  --color-linen: #f3ede3;
   --color-flour: #faf7f1;
   --color-stone-warm: #d9d2c5;
   --color-ink: #2b2722;
   --color-ink-soft: #6b6459;
   --color-ember: #c2683f;
   --font-weight-hair: 200;
+  --radius-glass: 26px;
+}
+
+/* ── Light (default) ──────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  --color-ink: #2b2722;
+  --color-ink-soft: #6f675b;
+  --color-ember: #c2683f;
+  --color-stone-warm: rgba(43, 39, 34, 0.10);
+
+  /* page base + the blooms that drift behind the glass */
+  --bg-base: #efe8dc;
+  --bloom-a: rgba(194, 104, 63, 0.28);   /* ember */
+  --bloom-b: rgba(214, 184, 140, 0.40);  /* wheat */
+  --bloom-c: rgba(255, 255, 255, 0.55);  /* light lift */
+
+  /* frosted panels */
+  --glass-bg: rgba(255, 253, 250, 0.55);
+  --glass-bg-strong: rgba(255, 253, 250, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-hairline: rgba(43, 39, 34, 0.08);
+  --glass-shadow:
+    0 10px 40px -12px rgba(43, 39, 34, 0.22),
+    0 2px 8px -4px rgba(43, 39, 34, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+
+  /* the solid "ink" action button reads as dark glass */
+  --action-bg: rgba(43, 39, 34, 0.92);
+  --action-ink: #faf7f1;
+
+  /* aliases kept for components still naming the old surfaces */
+  --color-flour: var(--glass-bg);
+  --color-linen: var(--bg-base);
+}
+
+/* ── Dark (system) ────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-ink: #f4ede2;
+    --color-ink-soft: #a89f93;
+    --color-ember: #e58a5c;
+    --color-stone-warm: rgba(255, 255, 255, 0.12);
+
+    --bg-base: #131019;
+    --bloom-a: rgba(224, 120, 74, 0.30);   /* ember glow */
+    --bloom-b: rgba(120, 78, 142, 0.34);   /* plum */
+    --bloom-c: rgba(60, 52, 80, 0.40);     /* cool depth */
+
+    --glass-bg: rgba(38, 33, 44, 0.42);
+    --glass-bg-strong: rgba(44, 38, 50, 0.62);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-hairline: rgba(255, 255, 255, 0.08);
+    --glass-shadow:
+      0 16px 50px -16px rgba(0, 0, 0, 0.65),
+      0 2px 10px -6px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+    --action-bg: rgba(244, 237, 226, 0.92);
+    --action-ink: #1a161f;
+
+    --color-flour: var(--glass-bg);
+    --color-linen: var(--bg-base);
+  }
 }
 
 html, body {
-  background-color: var(--color-linen);
+  background-color: var(--bg-base);
   color: var(--color-ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+
+/* The living background: two big soft blooms that drift very slowly. Fixed so
+   the glass always has something to refract. */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+.app-bg::before,
+.app-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  will-change: transform;
+}
+.app-bg::before {
+  width: 60vmax; height: 60vmax;
+  top: -18vmax; left: -12vmax;
+  background: radial-gradient(circle at center, var(--bloom-a), transparent 62%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+.app-bg::after {
+  width: 64vmax; height: 64vmax;
+  bottom: -22vmax; right: -16vmax;
+  background: radial-gradient(circle at center, var(--bloom-b), transparent 62%);
+  animation: drift-b 32s ease-in-out infinite alternate;
+}
+.app-bg > .lift {
+  position: absolute; inset: 0;
+  background: radial-gradient(120vmax 80vmax at 50% -10%, var(--bloom-c), transparent 55%);
+}
+
+@keyframes drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(8vmax, 6vmax, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to   { transform: translate3d(-7vmax, -5vmax, 0) scale(1); }
+}
+
+/* ── Glass primitives ─────────────────────────────────────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-glass);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-glass);
+}
+.glass-hairline { border-color: var(--glass-hairline); }
+
+/* the primary action: a pill of "dark glass" (light theme) / "light glass" (dark) */
+.action {
+  background: var(--action-bg);
+  color: var(--action-ink);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  transition: transform .15s ease, opacity .15s ease;
+}
+.action:active { transform: scale(0.96); }
+.action:disabled { opacity: 0.4; }
+
+/* subtle entrance for surfaces */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise .5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-bg::before, .app-bg::after { animation: none; }
+  .rise { animation: none; }
+}
+
+/* Bind Tailwind Typography to our tokens so the synthesised guide is legible on
+   glass in both themes (otherwise dark mode keeps light-theme dark text). */
+.prose {
+  color: var(--color-ink);
+  --tw-prose-body: var(--color-ink);
+  --tw-prose-headings: var(--color-ink);
+  --tw-prose-bold: var(--color-ink);
+  --tw-prose-links: var(--color-ember);
+  --tw-prose-bullets: var(--color-ink-soft);
+  --tw-prose-counters: var(--color-ink-soft);
+  --tw-prose-quotes: var(--color-ink);
+  --tw-prose-quote-borders: var(--glass-hairline);
+  --tw-prose-hr: var(--glass-hairline);
+  --tw-prose-captions: var(--color-ink-soft);
+  --tw-prose-code: var(--color-ink);
 }

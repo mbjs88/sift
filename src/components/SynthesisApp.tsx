@@ -73,18 +73,18 @@ export default function SynthesisApp() {
         <Toggle active={mode === 'pantry'} onClick={() => setMode('pantry')}>Pantry Rescue</Toggle>
       </div>
 
-      <div className="flex items-center gap-2 rounded-2xl border border-[color:var(--color-stone-warm)] bg-[color:var(--color-flour)] px-4 py-3 shadow-sm">
+      <div className="glass-strong flex items-center gap-2 px-3 py-2.5">
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') run(); }}
           placeholder={PLACEHOLDER[mode]}
-          className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)]"
+          className="flex-1 bg-transparent outline-none text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)] text-[15px] pl-2"
         />
         <button
           onClick={run}
           disabled={loading}
-          className="rounded-xl bg-[color:var(--color-ink)] text-[color:var(--color-flour)] px-4 py-1.5 text-sm transition-transform active:scale-95 disabled:opacity-40"
+          className="action px-5 py-2 text-sm font-medium"
         >
           {loading ? 'Sifting…' : 'Sift'}
         </button>
@@ -113,11 +113,12 @@ function Toggle(
     <button
       onClick={onClick}
       className={
-        'rounded-full px-4 py-1.5 border transition-colors ' +
+        'rounded-full px-4 py-1.5 border transition-all active:scale-95 ' +
         (active
-          ? 'bg-[color:var(--color-ink)] text-[color:var(--color-flour)] border-[color:var(--color-ink)]'
-          : 'bg-transparent text-[color:var(--color-ink-soft)] border-[color:var(--color-stone-warm)]')
+          ? 'action border-transparent'
+          : 'glass glass-hairline text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)]')
       }
+      style={active ? undefined : { borderRadius: '9999px' }}
     >
       {children}
     </button>

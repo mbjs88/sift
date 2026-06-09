@@ -4,7 +4,7 @@
 // react-force-graph-2d touches `window` and canvas, so this island must be
 // mounted client:only — never server-rendered.
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import type { RetrievedNode, NodeType } from '../lib/synthesis';
 
@@ -29,8 +29,24 @@ function shortLabel(n: RetrievedNode): string {
   return first.length < n.body.length ? `${first}…` : first;
 }
 
+function useInkColor(): string {
+  const get = () =>
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+      ? '#f4ede2'
+      : '#2b2722';
+  const [ink, setInk] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const on = () => setInk(get());
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return ink;
+}
+
 export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
   const fgRef = useRef<any>(null);
+  const ink = useInkColor();
 
   const data = useMemo(() => {
     const gNodes: GraphNode[] = [
@@ -56,12 +72,12 @@ export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
   if (nodes.length === 0) return null;
 
   return (
-    <div className="rounded-3xl border border-[color:var(--color-stone-warm)] bg-[color:var(--color-flour)]/60 overflow-hidden h-[360px]">
+    <div className="glass overflow-hidden h-[360px]">
       <ForceGraph2D
         ref={fgRef}
         graphData={data}
         backgroundColor="rgba(0,0,0,0)"
-        linkColor={() => 'rgba(107,100,89,0.25)'}
+        linkColor={() => 'rgba(150,140,128,0.30)'}
         linkWidth={1}
         nodeRelSize={4}
         cooldownTicks={80}
@@ -70,12 +86,13 @@ export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
           const r = Math.max(3, (node.val ?? 2) * 1.6);
           ctx.beginPath();
           ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-          ctx.fillStyle = COLOR[node.type as GraphNode['type']] ?? COLOR.wisdom;
+          const fill = node.type === 'prompt' ? ink : (COLOR[node.type as GraphNode['type']] ?? COLOR.wisdom);
+          ctx.fillStyle = fill;
           ctx.fill();
 
           const fontSize = Math.max(9, 11 / scale);
           ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.fillStyle = '#2b2722';
+          ctx.fillStyle = ink;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillText(node.label, node.x, node.y + r + 2);
