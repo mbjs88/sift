@@ -6,6 +6,7 @@
 export const prerender = true;
 import '../styles/global.css';
 import AddSource from '../components/AddSource.tsx';
+import ImportSite from '../components/ImportSite.tsx';
 import LibraryGraph from '../components/LibraryGraph.tsx';
 import SynthesisApp from '../components/SynthesisApp.tsx';
 ---
@@ -53,6 +54,9 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
       </div>
       <div class="w-full rise" style="animation-delay:.05s">
         <AddSource client:only="react" />
+      </div>
+      <div class="w-full rise" style="animation-delay:.08s">
+        <ImportSite client:only="react" />
       </div>
       <div class="w-full rise" style="animation-delay:.1s">
         <LibraryGraph client:only="react" />
