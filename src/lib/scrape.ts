@@ -8,11 +8,34 @@ export interface ScrapeResult {
   text: string;
 }
 
+const SCRAPE_TIMEOUT_MS = 20_000;
+
 export async function scrapeArticle(url: string): Promise<ScrapeResult> {
-  const res = await fetch(url, {
-    headers: { 'user-agent': 'SiftBot/0.1 (+https://sift.app)' },
-    redirect: 'follow',
-  });
+  // Bare fetch with no timeout was the real cause of recipe links hanging in
+  // "scraping" forever — a slow/blocking page never resolves. Abort it.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SCRAPE_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        // Some hosts (Shopify, Cloudflare-fronted) stall or block obvious bots,
+        // so present as a normal browser to fetch the readable HTML.
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        accept: 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`scrape timed out after ${SCRAPE_TIMEOUT_MS / 1000}s`);
+    }
+    throw new Error(`scrape network error: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`scrape failed: ${res.status} ${res.statusText}`);
   const html = await res.text();
 

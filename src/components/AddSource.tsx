@@ -1,15 +1,16 @@
 // Add a source straight from the website — the on-screen twin of the PWA
-// share_target. Paste a recipe/video URL, POST it to /api/ingest as JSON with
-// the bearer token (same auth as synthesis; no form-POST, so no CSRF surface),
-// then watch the ingestion_jobs row move queued -> scraping -> extracting ->
-// done under the caller's RLS.
+// share_target. This is built for "save it and move on", not "watch it work":
+// pasting a link queues it instantly, clears the box, and the item processes in
+// the background while you add the next one. Each queued item shows a live
+// status + progress bar and can be dismissed.
 //
-// Visually this is deliberately NOT the Sift search bar: a dashed "intake" card
-// with an ember accent, so adding knowledge reads differently from querying it.
+// Auth: POST {url} as JSON with the bearer token (same as synthesis; no
+// form-POST, so no CSRF surface). Status comes from the ingestion_jobs row,
+// read under the caller's RLS.
 //
 // Mounted client:only — it reads the browser session the shell already seeded.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { browserSupabase } from '../lib/authClient';
 
 function sessionToken(): string | null {
@@ -17,35 +18,51 @@ function sessionToken(): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-type Phase = 'idle' | 'submitting' | 'working' | 'done' | 'failed';
+type Phase = 'submitting' | 'queued' | 'scraping' | 'extracting' | 'working' | 'done' | 'failed';
+
+interface Item {
+  id: string;        // local id (stable for React keys + cancellation)
+  url: string;
+  label: string;     // host, for a compact display
+  phase: Phase;
+  note?: string;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function AddSource() {
   const [url, setUrl] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [note, setNote] = useState<string | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [hint, setHint] = useState<string | null>(null);
+  const cancelled = useRef<Set<string>>(new Set());
 
-  const busy = phase === 'submitting' || phase === 'working';
+  function patch(id: string, p: Partial<Item>) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...p } : it)));
+  }
+
+  function dismiss(id: string) {
+    cancelled.current.add(id);           // stop its poll loop
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  }
 
   async function add() {
     const link = url.trim();
-    if (!link || busy) return;
+    if (!link) return;
     if (!looksLikeUrl(link)) {
-      setPhase('failed');
-      setNote('That doesn’t look like a link.');
+      setHint('That doesn’t look like a link.');
       return;
     }
-
     const token = sessionToken();
     if (!token) {
-      setPhase('failed');
-      setNote('Sign in to add a source.');
+      setHint('Sign in to add a source.');
       return;
     }
 
-    setPhase('submitting');
-    setNote(null);
+    const id = crypto.randomUUID();
+    setItems((prev) => [{ id, url: link, label: hostOf(link), phase: 'submitting' }, ...prev]);
+    setUrl('');          // free the box immediately — keep adding
+    setHint(null);
+
     try {
       const res = await fetch('/api/ingest', {
         method: 'POST',
@@ -58,48 +75,43 @@ export default function AddSource() {
       });
       const body = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string };
       if (!res.ok || !body.jobId) {
-        setPhase('failed');
-        setNote(messageFor(body.error));
+        patch(id, { phase: 'failed', note: messageFor(body.error) });
         return;
       }
-      setUrl('');
-      setPhase('working');
-      setNote('Added. Sift is reading it…');
-      await pollJob(body.jobId);
+      patch(id, { phase: 'working', note: 'Reading…' });
+      void pollJob(id, body.jobId);
     } catch {
-      setPhase('failed');
-      setNote('Something went wrong. Try again.');
+      patch(id, { phase: 'failed', note: 'Something went wrong. Try again.' });
     }
   }
 
-  // Watch the job row (RLS-scoped to the caller's account) until it resolves.
-  // We read `error` too, so a failed job shows the REAL reason, not a guess.
-  async function pollJob(jobId: string) {
+  // Watch one job's row until it resolves, the user dismisses it, or we give up.
+  async function pollJob(localId: string, jobId: string) {
     const supa = browserSupabase();
     const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
-      await sleep(2500);
+      if (cancelled.current.has(localId)) return;
+      await sleep(2000);
+      if (cancelled.current.has(localId)) return;
+
       const { data } = await supa
         .from('ingestion_jobs')
         .select('status, error')
         .eq('id', jobId)
         .single();
-      const s = data?.status as string | undefined;
+      const s = data?.status as Phase | undefined;
       if (s === 'done') {
-        setPhase('done');
-        setNote('Saved to your knowledge.');
+        patch(localId, { phase: 'done', note: 'Saved.' });
         return;
       }
       if (s === 'failed') {
-        setPhase('failed');
-        setNote(failureMessage(data?.error as string | null | undefined));
+        patch(localId, { phase: 'failed', note: failureMessage(data?.error as string | null) });
         return;
       }
-      if (s) setNote(labelFor(s));
+      if (s) patch(localId, { phase: s, note: labelFor(s) });
     }
-    // Still running past the watch window — it keeps going server-side.
-    setPhase('done');
-    setNote('Still processing — it’ll appear shortly.');
+    // Past the watch window — it keeps running server-side and will land.
+    patch(localId, { phase: 'done', note: 'Still saving — it’ll appear shortly.' });
   }
 
   return (
@@ -128,29 +140,86 @@ export default function AddSource() {
           />
           <button
             onClick={add}
-            disabled={busy}
-            className="rounded-xl px-4 py-1.5 text-sm text-[color:var(--color-flour)] transition-transform active:scale-95 disabled:opacity-40"
+            className="rounded-xl px-4 py-1.5 text-sm text-[color:var(--color-flour)] transition-transform active:scale-95"
             style={{ background: 'var(--color-ember)' }}
           >
-            {busy ? 'Adding…' : 'Add'}
+            Add
           </button>
         </div>
       </div>
 
-      {note && (
-        <p
-          className={
-            'mt-2 text-sm text-center ' +
-            (phase === 'failed'
-              ? 'text-[color:var(--color-ember)]'
-              : 'text-[color:var(--color-ink-soft)]')
-          }
-        >
-          {note}
-        </p>
+      {hint && (
+        <p className="mt-2 text-sm text-center text-[color:var(--color-ember)]">{hint}</p>
+      )}
+
+      {items.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {items.map((it) => (
+            <SourceRow key={it.id} item={it} onDismiss={() => dismiss(it.id)} />
+          ))}
+        </ul>
       )}
     </div>
   );
+}
+
+function SourceRow({ item, onDismiss }: { item: Item; onDismiss: () => void }) {
+  const failed = item.phase === 'failed';
+  const done = item.phase === 'done';
+  const active = !failed && !done;
+  const pct = progressFor(item.phase);
+
+  return (
+    <li className="rounded-xl border border-[color:var(--color-stone-warm)] bg-[color:var(--color-flour)] px-3 py-2">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0 truncate text-sm text-[color:var(--color-ink)]" title={item.url}>
+          {item.label}
+        </span>
+        <span
+          className={
+            'text-xs whitespace-nowrap ' +
+            (failed ? 'text-[color:var(--color-ember)]' : 'text-[color:var(--color-ink-soft)]')
+          }
+        >
+          {done ? '✓ ' : ''}{item.note ?? labelFor(item.phase)}
+        </span>
+        <button
+          onClick={onDismiss}
+          aria-label={active ? 'Dismiss' : 'Remove'}
+          className="grid place-items-center w-6 h-6 rounded-full text-[color:var(--color-ink-soft)] hover:bg-[color:var(--color-stone-warm)]/60 transition-colors"
+          title={active ? 'Stop watching this' : 'Remove'}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[color:var(--color-stone-warm)]/50">
+        <div
+          className={'h-full rounded-full transition-[width] duration-700 ease-out ' + (active ? 'animate-pulse' : '')}
+          style={{
+            width: `${pct}%`,
+            background: failed ? 'transparent' : 'var(--color-ember)',
+          }}
+        />
+      </div>
+    </li>
+  );
+}
+
+function progressFor(phase: Phase): number {
+  switch (phase) {
+    case 'submitting': return 8;
+    case 'queued': return 20;
+    case 'scraping': return 45;
+    case 'working': return 55;
+    case 'extracting': return 80;
+    case 'done': return 100;
+    case 'failed': return 100;
+  }
+}
+
+function hostOf(s: string): string {
+  try { return new URL(s).hostname.replace(/^www\./, ''); } catch { return s; }
 }
 
 function looksLikeUrl(s: string): boolean {
@@ -164,29 +233,35 @@ function looksLikeUrl(s: string): boolean {
 
 function labelFor(status: string): string {
   switch (status) {
+    case 'submitting': return 'Adding…';
     case 'queued': return 'Queued…';
     case 'scraping': return 'Fetching the page…';
+    case 'working': return 'Reading…';
     case 'extracting': return 'Sifting the signal…';
+    case 'done': return 'Saved.';
     default: return 'Working…';
   }
 }
 
-// Translate the job's raw error into something legible, but keep the underlying
-// detail visible — it's the only diagnostic the user can read back to us.
+// Translate the job's raw error into something legible, keeping the underlying
+// detail — it's the only diagnostic the user can read back to us.
 function failureMessage(error?: string | null): string {
   if (!error) return 'Couldn’t process that link.';
   if (error.startsWith('daily_quota_exhausted')) {
     return 'Daily AI quota reached — try again tomorrow.';
   }
+  if (/scrape timed out|scrape network error/i.test(error)) {
+    return 'That page wouldn’t load in time — try another link.';
+  }
   const m = error.match(/^(\d{3})\b/);
   if (m) {
     const code = m[1];
     if (code === '400' || code === '403') {
-      return `Sift’s AI key was rejected (${code}). Check GEMINI_API_KEY is set on the Worker. (${trim(error)})`;
+      return `Sift’s AI key was rejected (${code}). Check GEMINI_API_KEY. (${trim(error)})`;
     }
     if (code === '429') return 'AI rate limit hit — try again in a minute.';
     if (code === '504') return 'The AI took too long (likely a long video) — try a shorter source.';
-    if (code === '503') return 'Couldn’t reach the AI service — check your connection and retry.';
+    if (code === '503') return 'Couldn’t reach the AI service — retry in a moment.';
   }
   return `Failed: ${trim(error)}`;
 }

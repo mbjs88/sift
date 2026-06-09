@@ -49,29 +49,39 @@ export async function runIngestion(
 
     await setStatus(supa, job.jobId, 'extracting');
 
-    // Embed + store each node so retrieval is node-level.
+    // Embed every node concurrently rather than one-at-a-time. A recipe can
+    // produce a dozen nodes; sequential embeds were the bulk of the wait.
+    const base = { account_id: job.accountId, created_by: job.userId, source_url: job.url };
+
+    const tasks: Array<Promise<void>> = [];
     if (result.recipe) {
-      const embedding = await router.embed(result.recipe.body, 'document');
-      await insert(supa, 'recipes', {
-        account_id: job.accountId, created_by: job.userId, source_url: job.url,
-        title: result.recipe.title, body: result.recipe.body,
-        embedding: vec(embedding), metadata: result.recipe.metadata,
-      });
+      const r = result.recipe;
+      tasks.push(
+        router.embed(r.body, 'document').then((embedding) =>
+          insert(supa, 'recipes', {
+            ...base, title: r.title, body: r.body,
+            embedding: vec(embedding), metadata: r.metadata,
+          })),
+      );
     }
     for (const t of result.techniques) {
-      const embedding = await router.embed(t.body, 'document');
-      await insert(supa, 'techniques', {
-        account_id: job.accountId, created_by: job.userId, source_url: job.url,
-        name: t.name, body: t.body, embedding: vec(embedding), metadata: t.metadata,
-      });
+      tasks.push(
+        router.embed(t.body, 'document').then((embedding) =>
+          insert(supa, 'techniques', {
+            ...base, name: t.name, body: t.body,
+            embedding: vec(embedding), metadata: t.metadata,
+          })),
+      );
     }
     for (const w of result.wisdom) {
-      const embedding = await router.embed(w.body, 'document');
-      await insert(supa, 'wisdom', {
-        account_id: job.accountId, created_by: job.userId, source_url: job.url,
-        body: w.body, embedding: vec(embedding), metadata: w.metadata,
-      });
+      tasks.push(
+        router.embed(w.body, 'document').then((embedding) =>
+          insert(supa, 'wisdom', {
+            ...base, body: w.body, embedding: vec(embedding), metadata: w.metadata,
+          })),
+      );
     }
+    await Promise.all(tasks);
 
     await setStatus(supa, job.jobId, 'done');
   } catch (err) {
