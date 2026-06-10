@@ -48,23 +48,60 @@ import SynthesisApp from '../components/SynthesisApp.tsx';
         <h1 class="text-3xl sm:text-4xl tracking-[-0.03em]" style="font-weight:600">
           Your kitchen, distilled.
         </h1>
-        <p class="mt-2 text-[color:var(--color-ink-soft)]">
-          Save anything. Sift turns it into knowledge you can actually cook from.
+        <p class="mt-2 text-[color:var(--color-ink-soft)] text-balance">
+          Save recipes and cooking videos in a tap. Sift keeps only the signal —
+          then answers from everything you’ve saved.
         </p>
       </div>
-      <div class="w-full rise" style="animation-delay:.05s">
+
+      <!-- 1 · Collect -->
+      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.05s">
+        <div class="flex items-center gap-3 px-1">
+          <span class="step-num">1</span>
+          <div>
+            <h2 class="text-sm" style="font-weight:600">Add to your library</h2>
+            <p class="text-xs text-[color:var(--color-ink-soft)]">One recipe at a time, or import a whole blog.</p>
+          </div>
+        </div>
         <AddSource client:only="react" />
-      </div>
-      <div class="w-full rise" style="animation-delay:.08s">
         <ImportSite client:only="react" />
-      </div>
-      <div class="w-full rise" style="animation-delay:.1s">
+      </section>
+
+      <!-- 2 · See -->
+      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.1s">
+        <div class="flex items-center gap-3 px-1">
+          <span class="step-num">2</span>
+          <div>
+            <h2 class="text-sm" style="font-weight:600">See what you’ve gathered</h2>
+            <p class="text-xs text-[color:var(--color-ink-soft)]">Every saved recipe, woven into a map.</p>
+          </div>
+        </div>
         <LibraryGraph client:only="react" />
-      </div>
-      <div class="w-full rise" style="animation-delay:.15s">
+      </section>
+
+      <!-- 3 · Ask -->
+      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.15s">
+        <div class="flex items-center gap-3 px-1">
+          <span class="step-num">3</span>
+          <div>
+            <h2 class="text-sm" style="font-weight:600">Ask your kitchen</h2>
+            <p class="text-xs text-[color:var(--color-ink-soft)]">“What can I make with…?” — answered from your own collection.</p>
+          </div>
+        </div>
         <SynthesisApp client:only="react" />
-      </div>
+      </section>
     </main>
+
+    <style>
+      .step-num {
+        display: grid; place-items: center;
+        width: 1.6rem; height: 1.6rem; flex: none;
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--color-ember) 16%, transparent);
+        color: var(--color-ember);
+        font-size: .8rem; font-weight: 600;
+      }
+    </style>
 
     <script>
       import { bootstrapAuth, signOut } from '../lib/authClient';

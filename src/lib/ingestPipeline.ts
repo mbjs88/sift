@@ -25,6 +25,9 @@ export interface IngestJob {
   accountId: string;
   userId: string;     // created_by
   url: string;
+  // When set, ingest this raw pasted text directly (no scrape, no source URL).
+  // Used by the "paste a recipe" fallback when a page won't parse.
+  rawText?: string;
 }
 
 type JobStatus = 'queued' | 'scraping' | 'extracting' | 'done' | 'failed';
@@ -41,17 +44,25 @@ export async function runIngestion(
       generationModel: env.GENERATION_MODEL,
     });
 
-    const kind = classifyUrl(job.url);
-    const result =
-      kind === 'youtube'
+    // Three sources: pasted raw text (no scrape), a YouTube video, or an article
+    // we scrape to text first. Raw text carries no source URL.
+    const isPaste = typeof job.rawText === 'string' && job.rawText.trim().length > 0;
+    const kind = isPaste ? 'text' : classifyUrl(job.url);
+    const result = isPaste
+      ? await router.extract({ kind: 'text', sourceUrl: '', text: job.rawText!.trim() })
+      : kind === 'youtube'
         ? await router.extract({ kind: 'youtube', videoUrl: normalizeYouTube(job.url) })
         : await router.extract({ kind: 'text', sourceUrl: job.url, ...(await scrapeArticle(job.url)) });
+
+    // Pasted text has no real source URL; keep the DB clean (null instead of the
+    // synthetic "paste:…" marker we use as the job key).
+    const sourceUrl = isPaste ? null : job.url;
 
     await setStatus(supa, job.jobId, 'extracting');
 
     // Embed every node concurrently rather than one-at-a-time. A recipe can
     // produce a dozen nodes; sequential embeds were the bulk of the wait.
-    const base = { account_id: job.accountId, created_by: job.userId, source_url: job.url };
+    const base = { account_id: job.accountId, created_by: job.userId, source_url: sourceUrl };
 
     const tasks: Array<Promise<void>> = [];
     if (result.recipe) {

@@ -28,22 +28,28 @@ interface ShareInput {
   url: string | null;
   text: string | null;
   title: string | null;
+  rawText: string | null;   // pasted recipe text (the parser-failed fallback)
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const input = await readShareInput(request);
   const wantsJson = expectsJson(request);
 
+  // Raw-text paste path: the body is a recipe, not a link. Needs real content.
+  const pasteText = input.rawText && input.rawText.trim().length >= 20
+    ? input.rawText.trim()
+    : null;
+
   // Android often delivers the link inside `text` rather than `url`.
   const rawUrl = input.url ?? firstUrlIn(input.text) ?? firstUrlIn(input.title);
-  if (!rawUrl) {
+  if (!pasteText && !rawUrl) {
     return wantsJson
       ? json({ error: 'no_url', message: 'No shareable URL found in request.' }, 400)
       : redirect('/?ingest=no_url');
   }
-  // Canonicalise so the same link can't be saved twice (and so we ingest the
-  // clean URL, not one carrying tracking params).
-  const url = canonicalUrl(rawUrl);
+  // Canonicalise links so the same one can't be saved twice. Pasted text gets a
+  // unique synthetic key (the pipeline stores a null source_url for it).
+  const url = pasteText ? `paste:${crypto.randomUUID()}` : canonicalUrl(rawUrl!);
 
   const token = bearerFromRequest(request);
   if (!token) {
@@ -70,8 +76,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Dedup: if this exact source already has a job that succeeded or is still
   // running for this account, don't add it again. (Failed jobs are allowed to
-  // retry.) The canonical URL makes this robust against tracking-param noise.
-  const { data: existing } = await supa
+  // retry.) Skipped for pasted text, which has a unique synthetic key.
+  const { data: existing } = pasteText ? { data: null } : await supa
     .from('ingestion_jobs')
     .select('id, status')
     .eq('account_id', accountId)
@@ -111,7 +117,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Hand the heavy work to the background of this request so the response — and
   // the share sheet — returns now. waitUntil keeps the Worker running until the
   // pipeline resolves. The pipeline owns all its own error handling.
-  const work = runIngestion(supa, env, { jobId: jobRow.id, accountId, userId, url });
+  const work = runIngestion(supa, env, {
+    jobId: jobRow.id, accountId, userId, url,
+    ...(pasteText ? { rawText: pasteText } : {}),
+  });
   locals.cfContext.waitUntil(work);
 
   return wantsJson
@@ -125,10 +134,13 @@ async function readShareInput(request: Request): Promise<ShareInput> {
   const ct = request.headers.get('content-type') ?? '';
   if (ct.includes('application/json')) {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-    return { url: str(body.url), text: str(body.text), title: str(body.title) };
+    return { url: str(body.url), text: str(body.text), title: str(body.title), rawText: str(body.rawText) };
   }
   const form = await request.formData().catch(() => null);
-  return { url: str(form?.get('url')), text: str(form?.get('text')), title: str(form?.get('title')) };
+  return {
+    url: str(form?.get('url')), text: str(form?.get('text')),
+    title: str(form?.get('title')), rawText: str(form?.get('rawText')),
+  };
 }
 
 function str(v: unknown): string | null {

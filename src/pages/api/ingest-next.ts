@@ -56,6 +56,7 @@ export const POST: APIRoute = async ({ request }) => {
     .select('id, url')
     .eq('account_id', accountId)
     .eq('status', 'queued')
+    .not('url', 'like', 'paste:%')   // pasted-text jobs run inline; no text stored to reprocess
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();

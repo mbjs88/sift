@@ -58,6 +58,7 @@ async function drain(env: Env): Promise<{ claimed: number; done: number; failed:
     .from('ingestion_jobs')
     .select('id, url, account_id, created_by')
     .eq('status', 'queued')
+    .not('url', 'like', 'paste:%')   // pasted-text jobs run inline; nothing to reprocess here
     .order('created_at', { ascending: true })
     .limit(perRun);
 
