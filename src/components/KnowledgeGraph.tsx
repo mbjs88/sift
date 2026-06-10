@@ -29,6 +29,24 @@ function shortLabel(n: RetrievedNode): string {
   return first.length < n.body.length ? `${first}…` : first;
 }
 
+// ForceGraph2D defaults its canvas to the WINDOW size; inside a fixed-height,
+// overflow-hidden card the graph then sits outside the visible crop. Measure
+// the container and pass explicit dimensions.
+function useBoxSize() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, size };
+}
+
 function useInkColor(): string {
   const get = () => {
     if (typeof document !== 'undefined') {
@@ -52,6 +70,7 @@ function useInkColor(): string {
 export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
   const fgRef = useRef<any>(null);
   const ink = useInkColor();
+  const { ref: boxRef, size } = useBoxSize();
 
   const data = useMemo(() => {
     const gNodes: GraphNode[] = [
@@ -77,15 +96,18 @@ export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
   if (nodes.length === 0) return null;
 
   return (
-    <div className="glass overflow-hidden h-[360px]">
-      <ForceGraph2D
+    <div ref={boxRef} className="glass overflow-hidden h-[360px]">
+      {size.w > 0 && <ForceGraph2D
         ref={fgRef}
+        width={size.w}
+        height={size.h}
         graphData={data}
         backgroundColor="rgba(0,0,0,0)"
         linkColor={() => 'rgba(150,140,128,0.30)'}
         linkWidth={1}
         nodeRelSize={4}
         cooldownTicks={80}
+        onEngineStop={() => fgRef.current?.zoomToFit(400, 24)}
         enableNodeDrag={false}
         nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, scale: number) => {
           const r = Math.max(3, (node.val ?? 2) * 1.6);
@@ -102,7 +124,7 @@ export default function KnowledgeGraph({ nodes }: { nodes: RetrievedNode[] }) {
           ctx.textBaseline = 'top';
           ctx.fillText(node.label, node.x, node.y + r + 2);
         }}
-      />
+      />}
     </div>
   );
 }

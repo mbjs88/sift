@@ -26,6 +26,7 @@ export default function LibraryList() {
   const [data, setData] = useState<GraphData | null>(null);
   const [state, setState] = useState<'loading' | 'idle' | 'error'>('loading');
   const [filter, setFilter] = useState<NodeType | 'all'>('all');
+  const [query, setQuery] = useState('');
 
   useEffect(() => { void load(); }, []);
   async function load() {
@@ -60,10 +61,30 @@ export default function LibraryList() {
     );
   }
 
-  const shown = data!.nodes.filter((n) => n.type !== 'source' && (filter === 'all' || n.type === filter));
+  const q = query.trim().toLowerCase();
+  const shown = data!.nodes.filter((n) =>
+    n.type !== 'source' &&
+    (filter === 'all' || n.type === filter) &&
+    (!q || n.label.toLowerCase().includes(q)));
 
   return (
     <div className="flex flex-col gap-4">
+      {/* search */}
+      <div style={{ position: 'relative' }}>
+        <span aria-hidden style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-soft)', display: 'flex' }}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+        </span>
+        <input
+          className="field"
+          type="search"
+          placeholder="Search your library…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ borderRadius: 999, paddingLeft: 40 }}
+          aria-label="Search your library"
+        />
+      </div>
+
       {/* filter chips */}
       <div className="flex gap-2 flex-wrap">
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All {total}</FilterChip>
@@ -74,7 +95,14 @@ export default function LibraryList() {
         ))}
       </div>
 
-      <ul className="glass flex flex-col" style={{ padding: 6, gap: 2 }}>
+      {shown.length === 0 && (
+        <p className="muted text-center" style={{ padding: '28px 0', margin: 0 }}>
+          No matches{q ? <> for “{query.trim()}”</> : null}.{' '}
+          <button className="chip" onClick={() => { setQuery(''); setFilter('all'); }} style={{ cursor: 'pointer' }}>Clear</button>
+        </p>
+      )}
+
+      <ul className="glass flex flex-col" style={{ padding: 6, gap: 2, display: shown.length === 0 ? 'none' : undefined }}>
         {shown.map((n) => (
           <li key={n.id}>
             <button

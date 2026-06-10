@@ -31,6 +31,24 @@ function isDark(): boolean {
   }
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
+// ForceGraph2D defaults its canvas to the WINDOW size; inside a fixed-height,
+// overflow-hidden card the auto-fit then centres the graph outside the visible
+// crop — i.e. a blank box. Measure the container and pass explicit dimensions.
+function useBoxSize() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, size };
+}
+
 function useInkColor(): string {
   const get = () => (isDark() ? '#f4ede2' : '#2b2722');
   const [ink, setInk] = useState(get);
@@ -52,6 +70,7 @@ export default function LibraryGraph({ embedded = false }: { embedded?: boolean 
   const [data, setData] = useState<GraphData | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const ink = useInkColor();
+  const { ref: boxRef, size } = useBoxSize();
 
   const load = useCallback(async () => {
     const token = sessionToken();
@@ -105,15 +124,18 @@ export default function LibraryGraph({ embedded = false }: { embedded?: boolean 
           )}
           {state === 'idle' && data && total! > 0 && (
             <>
-              <div className="glass overflow-hidden h-[420px]">
-                <ForceGraph2D
+              <div ref={boxRef} className="glass overflow-hidden h-[420px]">
+                {size.w > 0 && <ForceGraph2D
                   ref={fgRef}
+                  width={size.w}
+                  height={size.h}
                   graphData={data}
                   backgroundColor="rgba(0,0,0,0)"
                   linkColor={(l: any) => (l.kind === 'shared' ? 'rgba(194,104,63,0.22)' : 'rgba(107,100,89,0.28)')}
                   linkWidth={1}
                   nodeRelSize={4}
                   cooldownTicks={120}
+                  onEngineStop={() => fgRef.current?.zoomToFit(400, 28)}
                   onNodeClick={(n: any) => { if (n.url) window.open(n.url, '_blank', 'noopener'); }}
                   nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, scale: number) => {
                     const isSource = node.type === 'source';
@@ -137,7 +159,7 @@ export default function LibraryGraph({ embedded = false }: { embedded?: boolean 
                       ctx.fillText(node.label, node.x, node.y + r + 1.5);
                     }
                   }}
-                />
+                />}
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[color:var(--color-ink-soft)]">
                 <Legend color={COLOR.source} label={`Sources ${data.counts.source}`} ring />

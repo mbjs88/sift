@@ -48,11 +48,11 @@ export default function AppShell() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 pt-6" style={{ paddingBottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
+      <main className="max-w-2xl mx-auto px-4 pt-6" style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
         {tab === 'home' && (
           <div className="flex flex-col gap-6">
             <div className="rise px-1 pt-2">
-              <h1 style={{ fontSize: 'var(--t-display)', fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1.04, margin: 0, maxWidth: '15ch' }}>
+              <h1 className="display" style={{ fontSize: 'var(--t-display)', lineHeight: 1.06, margin: 0, maxWidth: '15ch' }}>
                 Your kitchen, distilled.
               </h1>
               <p className="muted" style={{ margin: '12px 0 0', fontSize: '1.05rem', lineHeight: 1.5, maxWidth: '42ch' }}>
@@ -118,7 +118,7 @@ export default function AppShell() {
 function SectionHead({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="px-1 mb-4">
-      <h1 style={{ fontSize: 'var(--t-h1)', fontWeight: 600, letterSpacing: '-0.03em', margin: 0 }}>{title}</h1>
+      <h1 className="display" style={{ fontSize: 'var(--t-h1)', margin: 0 }}>{title}</h1>
       <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.95rem' }}>{sub}</p>
     </div>
   );
@@ -130,7 +130,7 @@ function Wordmark() {
       <span style={{ position: 'relative', width: 10, height: 10 }}>
         <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--ember)', boxShadow: '0 0 12px var(--ember)' }} />
       </span>
-      <span style={{ fontWeight: 600, fontSize: '1.2rem', letterSpacing: '-0.03em' }}>Sift</span>
+      <span className="display" style={{ fontSize: '1.35rem', fontWeight: 600 }}>Sift</span>
     </a>
   );
 }
