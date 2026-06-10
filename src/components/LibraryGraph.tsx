@@ -24,24 +24,31 @@ const COLOR: Record<NodeType, string> = {
   wisdom: '#c2a878',     // wheat
 };
 
+function isDark(): boolean {
+  if (typeof document !== 'undefined') {
+    if (document.documentElement.classList.contains('theme-dark')) return true;
+    if (document.documentElement.classList.contains('theme-light')) return false;
+  }
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+}
 function useInkColor(): string {
-  const get = () =>
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
-      ? '#f4ede2'
-      : '#2b2722';
+  const get = () => (isDark() ? '#f4ede2' : '#2b2722');
   const [ink, setInk] = useState(get);
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const on = () => setInk(get());
     mq.addEventListener?.('change', on);
-    return () => mq.removeEventListener?.('change', on);
+    // also react to manual theme-class toggles
+    const obs = new MutationObserver(on);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => { mq.removeEventListener?.('change', on); obs.disconnect(); };
   }, []);
   return ink;
 }
 
-export default function LibraryGraph() {
+export default function LibraryGraph({ embedded = false }: { embedded?: boolean }) {
   const fgRef = useRef<any>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [data, setData] = useState<GraphData | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const ink = useInkColor();
@@ -69,17 +76,19 @@ export default function LibraryGraph() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 text-sm text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors"
-      >
-        <span className={'inline-block transition-transform ' + (open ? 'rotate-90' : '')}>›</span>
-        <span className="uppercase tracking-wide text-xs">Your library map</span>
-        {total !== null && <span className="text-xs opacity-70">({total} saved)</span>}
-      </button>
+      {!embedded && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-2 text-sm text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors"
+        >
+          <span className={'inline-block transition-transform ' + (open ? 'rotate-90' : '')}>›</span>
+          <span className="uppercase tracking-wide text-xs">Your library map</span>
+          {total !== null && <span className="text-xs opacity-70">({total} saved)</span>}
+        </button>
+      )}
 
       {open && (
-        <div className="mt-3">
+        <div className={embedded ? '' : 'mt-3'}>
           {state === 'loading' && (
             <p className="text-sm text-center text-[color:var(--color-ink-soft)] py-10">Mapping your knowledge…</p>
           )}

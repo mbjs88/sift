@@ -30,16 +30,21 @@ function shortLabel(n: RetrievedNode): string {
 }
 
 function useInkColor(): string {
-  const get = () =>
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
-      ? '#f4ede2'
-      : '#2b2722';
+  const get = () => {
+    if (typeof document !== 'undefined') {
+      if (document.documentElement.classList.contains('theme-dark')) return '#f4ede2';
+      if (document.documentElement.classList.contains('theme-light')) return '#2b2722';
+    }
+    return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? '#f4ede2' : '#2b2722';
+  };
   const [ink, setInk] = useState(get);
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const on = () => setInk(get());
     mq.addEventListener?.('change', on);
-    return () => mq.removeEventListener?.('change', on);
+    const obs = new MutationObserver(on);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => { mq.removeEventListener?.('change', on); obs.disconnect(); };
   }, []);
   return ink;
 }

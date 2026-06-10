@@ -17,6 +17,13 @@ import '../styles/global.css';
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Sift — your kitchen, distilled</title>
+    <script is:inline>
+      try {
+        var s = localStorage.getItem('sift-theme');
+        var dark = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.add(dark ? 'theme-dark' : 'theme-light');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div class="app-bg" aria-hidden="true"><div class="lift"></div></div>

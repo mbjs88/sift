@@ -1,129 +1,42 @@
 ---
-// The synthesis workspace. The shell is static; the island (client:only) reads
-// the browser session and drives RAG retrieval + the knowledge graph. SSR auth
-// gating lands with full OAuth — for now the island prompts to sign in if it
-// finds no session.
+// The workspace. A single client:only React shell (AppShell) owns the tabbed UI,
+// auth, and theme. The page itself is just the static frame + living backdrop.
 export const prerender = true;
 import '../styles/global.css';
-import AddSource from '../components/AddSource.tsx';
-import ImportSite from '../components/ImportSite.tsx';
-import LibraryGraph from '../components/LibraryGraph.tsx';
-import SynthesisApp from '../components/SynthesisApp.tsx';
+import AppShell from '../components/AppShell.tsx';
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#efe8dc" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#131019" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Sift — Synthesis</title>
+    <title>Sift — your kitchen, distilled</title>
+    <!-- Set the theme class before first paint (no flash). -->
+    <script is:inline>
+      try {
+        var s = localStorage.getItem('sift-theme');
+        var dark = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.add(dark ? 'theme-dark' : 'theme-light');
+      } catch (e) {}
+    </script>
   </head>
   <body>
-    <!-- living glass backdrop -->
     <div class="app-bg" aria-hidden="true"><div class="lift"></div></div>
-
-    <div class="sticky top-0 z-20 px-4 pt-4">
-      <header class="glass glass-hairline w-full max-w-2xl mx-auto flex items-center justify-between pl-5 pr-3 py-2.5" style="border-radius:9999px">
-        <a href="/" class="flex items-baseline gap-1.5 select-none">
-          <span class="text-xl tracking-[-0.04em]" style="font-weight:600">Sift</span>
-          <span class="w-1.5 h-1.5 rounded-full mb-0.5" style="background:var(--color-ember)"></span>
-        </a>
-        <button
-          id="signout"
-          class="text-sm text-[color:var(--color-ink-soft)] px-3 py-1.5 rounded-full hover:bg-[color:var(--glass-hairline)] transition-colors active:scale-95"
-        >
-          Log out
-        </button>
-      </header>
-    </div>
-
-    <main class="min-h-dvh flex flex-col items-center gap-10 px-4 pt-10 pb-20">
-      <div class="w-full max-w-2xl mx-auto text-center rise">
-        <h1 class="text-3xl sm:text-4xl tracking-[-0.03em]" style="font-weight:600">
-          Your kitchen, distilled.
-        </h1>
-        <p class="mt-2 text-[color:var(--color-ink-soft)] text-balance">
-          Save recipes and cooking videos in a tap. Sift keeps only the signal —
-          then answers from everything you’ve saved.
-        </p>
-      </div>
-
-      <!-- 1 · Collect -->
-      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.05s">
-        <div class="flex items-center gap-3 px-1">
-          <span class="step-num">1</span>
-          <div>
-            <h2 class="text-sm" style="font-weight:600">Add to your library</h2>
-            <p class="text-xs text-[color:var(--color-ink-soft)]">One recipe at a time, or import a whole blog.</p>
-          </div>
-        </div>
-        <AddSource client:only="react" />
-        <ImportSite client:only="react" />
-      </section>
-
-      <!-- 2 · See -->
-      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.1s">
-        <div class="flex items-center gap-3 px-1">
-          <span class="step-num">2</span>
-          <div>
-            <h2 class="text-sm" style="font-weight:600">See what you’ve gathered</h2>
-            <p class="text-xs text-[color:var(--color-ink-soft)]">Every saved recipe, woven into a map.</p>
-          </div>
-        </div>
-        <LibraryGraph client:only="react" />
-      </section>
-
-      <!-- 3 · Ask -->
-      <section class="w-full max-w-2xl mx-auto flex flex-col gap-4 rise" style="animation-delay:.15s">
-        <div class="flex items-center gap-3 px-1">
-          <span class="step-num">3</span>
-          <div>
-            <h2 class="text-sm" style="font-weight:600">Ask your kitchen</h2>
-            <p class="text-xs text-[color:var(--color-ink-soft)]">“What can I make with…?” — answered from your own collection.</p>
-          </div>
-        </div>
-        <SynthesisApp client:only="react" />
-      </section>
-    </main>
-
-    <style>
-      .step-num {
-        display: grid; place-items: center;
-        width: 1.6rem; height: 1.6rem; flex: none;
-        border-radius: 9999px;
-        background: color-mix(in srgb, var(--color-ember) 16%, transparent);
-        color: var(--color-ember);
-        font-size: .8rem; font-weight: 600;
-      }
-    </style>
+    <AppShell client:only="react" />
 
     <script>
-      import { bootstrapAuth, signOut } from '../lib/authClient';
-
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
       }
-
-      // Hydrate the session (also consumes the OAuth redirect hash on first
-      // landing) and seed the sb-access-token cookie before the island fetches.
-      // No session -> back to the sign-in gate.
-      bootstrapAuth().then((signedIn) => {
-        if (!signedIn) window.location.replace('/');
-      });
-
-      // Log out: clear the Supabase session + token cookie, return to the gate.
-      document.getElementById('signout')?.addEventListener('click', async () => {
-        await signOut();
-        window.location.replace('/');
-      });
     </script>
   </body>
 </html>
