@@ -10,9 +10,10 @@
 // app now. The ingestion_jobs row is the status record the UI can read.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createRouter, LlmError } from './llmRouter';
+import { createRouter, LlmError, type LlmRouter } from './llmRouter';
 import { classifyUrl, normalizeYouTube } from './url';
 import { scrapeArticle } from './scrape';
+import { fetchYouTubeText } from './youtube';
 
 export interface PipelineEnv {
   GEMINI_API_KEY: string;
@@ -51,7 +52,7 @@ export async function runIngestion(
     const result = isPaste
       ? await router.extract({ kind: 'text', sourceUrl: '', text: job.rawText!.trim() })
       : kind === 'youtube'
-        ? await router.extract({ kind: 'youtube', videoUrl: normalizeYouTube(job.url) })
+        ? await extractYouTube(router, normalizeYouTube(job.url))
         : await router.extract({ kind: 'text', sourceUrl: job.url, ...(await scrapeArticle(job.url)) });
 
     // Pasted text has no real source URL; keep the DB clean (null instead of the
@@ -105,6 +106,27 @@ export async function runIngestion(
         : err instanceof Error ? err.message : String(err);
     await setStatus(supa, job.jobId, 'failed', reason).catch(() => {});
   }
+}
+
+// YouTube, transcript-first: the captions + description usually carry the whole
+// recipe and extract in seconds as plain text. Only when a video has neither do
+// we fall back to native Gemini video understanding (slow, 8h/day free cap).
+const MIN_USEFUL_CHARS = 400;
+
+async function extractYouTube(router: LlmRouter, videoUrl: string) {
+  try {
+    const yt = await fetchYouTubeText(videoUrl);
+    if (yt.text.length >= MIN_USEFUL_CHARS) {
+      return await router.extract({
+        kind: 'text',
+        sourceUrl: videoUrl,
+        text: `VIDEO TITLE: ${yt.title}\n\n${yt.text}`,
+      });
+    }
+  } catch {
+    // page fetch / parse failed — let Gemini watch the video instead
+  }
+  return router.extract({ kind: 'youtube', videoUrl });
 }
 
 // pgvector over PostgREST wants the textual literal '[1,2,3]'.

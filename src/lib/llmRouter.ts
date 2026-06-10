@@ -115,7 +115,30 @@ async function generate(
 // turns that into a clean, terminal failure the poller can surface.
 const REQUEST_TIMEOUT_MS = 90_000;
 
+// Gemini's free tier intermittently answers 503 ("model overloaded") and
+// per-minute 429s. One bare attempt turned every blip into a failed job, so
+// retry transient errors with a short backoff. Timeouts (504) are NOT retried —
+// each attempt already waited 90s, and stacking three of those starves the
+// background task.
+const MAX_ATTEMPTS = 3;
+const BACKOFF_MS = [0, 1500, 5000];
+
 async function postJson(url: string, body: unknown): Promise<any> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+    try {
+      return await postJsonOnce(url, body);
+    } catch (e) {
+      lastErr = e;
+      const transient = e instanceof LlmError && e.retryable && e.status !== 504;
+      if (!transient) throw e;
+    }
+  }
+  throw lastErr;
+}
+
+async function postJsonOnce(url: string, body: unknown): Promise<any> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
   let res: Response;
