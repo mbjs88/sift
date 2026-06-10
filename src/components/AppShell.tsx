@@ -97,10 +97,14 @@ export default function AppShell() {
         )}
 
         {tab === 'graph' && (
-          <div className="rise">
-            <SectionHead title="Your knowledge map" sub="Sources cluster their nodes; shared ingredients weave them together." />
-            <LibraryGraph embedded />
-          </div>
+          <>
+            {/* Heading floats above the map; the .rise transform would trap a
+                position:fixed child, so the full-page graph sits outside it. */}
+            <div className="rise" style={{ position: 'relative', zIndex: 1, pointerEvents: 'none' }}>
+              <SectionHead title="Your knowledge map" sub="Drag to pan · pinch or scroll to zoom · tap a node to open it." />
+            </div>
+            <LibraryGraph />
+          </>
         )}
       </main>
 

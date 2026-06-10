@@ -1,11 +1,10 @@
-// The whole-library map: a force graph of everything you've saved. Source hubs
-// cluster the items that came from each page; shared ingredients/equipment draw
-// the cross-links between clusters. Collapsible so it doesn't dominate the page.
-//
-// react-force-graph-2d touches window + canvas, so this is client:only.
+// The whole-library map, full-page: the graph owns the entire viewport with no
+// card or border — it floats behind the frosted header and the pill nav.
+// Source hubs cluster the items that came from each page; shared ingredients
+// draw the cross-links. Rendering is our own ForceCanvas (no external dep).
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import ForceCanvas, { type FLink, type FNode } from './ForceCanvas';
 
 function sessionToken(): string | null {
   const m = document.cookie.match(/(?:^|;\s*)sb-access-token=([^;]+)/);
@@ -31,24 +30,6 @@ function isDark(): boolean {
   }
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
-// ForceGraph2D defaults its canvas to the WINDOW size; inside a fixed-height,
-// overflow-hidden card the auto-fit then centres the graph outside the visible
-// crop — i.e. a blank box. Measure the container and pass explicit dimensions.
-function useBoxSize() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return { ref, size };
-}
-
 function useInkColor(): string {
   const get = () => (isDark() ? '#f4ede2' : '#2b2722');
   const [ink, setInk] = useState(get);
@@ -56,7 +37,6 @@ function useInkColor(): string {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const on = () => setInk(get());
     mq.addEventListener?.('change', on);
-    // also react to manual theme-class toggles
     const obs = new MutationObserver(on);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => { mq.removeEventListener?.('change', on); obs.disconnect(); };
@@ -64,13 +44,10 @@ function useInkColor(): string {
   return ink;
 }
 
-export default function LibraryGraph({ embedded = false }: { embedded?: boolean }) {
-  const fgRef = useRef<any>(null);
-  const [open, setOpen] = useState(embedded);
+export default function LibraryGraph(_props: { embedded?: boolean }) {
   const [data, setData] = useState<GraphData | null>(null);
-  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [state, setState] = useState<'loading' | 'idle' | 'error'>('loading');
   const ink = useInkColor();
-  const { ref: boxRef, size } = useBoxSize();
 
   const load = useCallback(async () => {
     const token = sessionToken();
@@ -86,104 +63,96 @@ export default function LibraryGraph({ embedded = false }: { embedded?: boolean 
     }
   }, []);
 
-  // Load lazily the first time the map is opened.
-  useEffect(() => {
-    if (open && !data && state !== 'loading') void load();
-  }, [open, data, state, load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const total = data ? data.nodes.filter((n) => n.type !== 'source').length : null;
+  const total = data ? data.nodes.filter((n) => n.type !== 'source').length : 0;
+
+  const fNodes: FNode[] = useMemo(() =>
+    (data?.nodes ?? []).map((n) => ({
+      id: n.id,
+      label: n.label,
+      url: n.url,
+      color: COLOR[n.type],
+      r: n.type === 'source' ? 6 : 4.5,
+      ring: n.type === 'source' ? ink : null,
+      alwaysLabel: n.type === 'source',
+    })), [data, ink]);
+
+  const fLinks: FLink[] = useMemo(() =>
+    (data?.links ?? []).map((l) => ({
+      source: l.source,
+      target: l.target,
+      color: l.kind === 'shared' ? 'rgba(194,104,63,0.25)' : 'rgba(120,110,98,0.30)',
+      rest: l.kind === 'shared' ? 75 : 38,
+    })), [data]);
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      {!embedded && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-2 text-sm text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors"
-        >
-          <span className={'inline-block transition-transform ' + (open ? 'rotate-90' : '')}>›</span>
-          <span className="uppercase tracking-wide text-xs">Your library map</span>
-          {total !== null && <span className="text-xs opacity-70">({total} saved)</span>}
-        </button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+      {state === 'idle' && data && total > 0 && (
+        <ForceCanvas
+          nodes={fNodes}
+          links={fLinks}
+          ink={ink}
+          onNodeClick={(n) => { if (n.url) window.open(n.url, '_blank', 'noopener'); }}
+        />
       )}
 
-      {open && (
-        <div className={embedded ? '' : 'mt-3'}>
-          {state === 'loading' && (
-            <p className="text-sm text-center text-[color:var(--color-ink-soft)] py-10">Mapping your knowledge…</p>
-          )}
-          {state === 'error' && (
-            <p className="text-sm text-center text-[color:var(--color-ember)] py-10">
-              Couldn’t load the map.{' '}
-              <button onClick={load} className="underline underline-offset-2">Retry</button>
-            </p>
-          )}
-          {state === 'idle' && data && total === 0 && (
-            <p className="text-sm text-center text-[color:var(--color-ink-soft)] py-10">
-              Nothing saved yet. Add a recipe or video above and it’ll appear here.
-            </p>
-          )}
-          {state === 'idle' && data && total! > 0 && (
-            <>
-              <div ref={boxRef} className="glass overflow-hidden h-[420px]">
-                {size.w > 0 && <ForceGraph2D
-                  ref={fgRef}
-                  width={size.w}
-                  height={size.h}
-                  graphData={data}
-                  backgroundColor="rgba(0,0,0,0)"
-                  linkColor={(l: any) => (l.kind === 'shared' ? 'rgba(194,104,63,0.22)' : 'rgba(107,100,89,0.28)')}
-                  linkWidth={1}
-                  nodeRelSize={4}
-                  cooldownTicks={120}
-                  onEngineStop={() => fgRef.current?.zoomToFit(400, 28)}
-                  onNodeClick={(n: any) => { if (n.url) window.open(n.url, '_blank', 'noopener'); }}
-                  nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, scale: number) => {
-                    const isSource = node.type === 'source';
-                    const r = isSource ? 5 : 4;
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-                    ctx.fillStyle = COLOR[node.type as NodeType] ?? COLOR.wisdom;
-                    ctx.fill();
-                    if (isSource) {
-                      ctx.lineWidth = 1.5 / scale;
-                      ctx.strokeStyle = ink;
-                      ctx.stroke();
-                    }
-                    // Only label when zoomed in enough, to keep the overview calm.
-                    if (scale > 1.4 || isSource) {
-                      const fontSize = Math.max(8, 10 / scale);
-                      ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-                      ctx.fillStyle = ink;
-                      ctx.textAlign = 'center';
-                      ctx.textBaseline = 'top';
-                      ctx.fillText(node.label, node.x, node.y + r + 1.5);
-                    }
-                  }}
-                />}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[color:var(--color-ink-soft)]">
-                <Legend color={COLOR.source} label={`Sources ${data.counts.source}`} ring />
-                <Legend color={COLOR.recipe} label={`Recipes ${data.counts.recipe}`} />
-                <Legend color={COLOR.technique} label={`Techniques ${data.counts.technique}`} />
-                <Legend color={COLOR.wisdom} label={`Wisdom ${data.counts.wisdom}`} />
-                <button onClick={load} className="underline underline-offset-2 hover:text-[color:var(--color-ink)]">Refresh</button>
-              </div>
-              <p className="mt-1 text-center text-xs text-[color:var(--color-ink-soft)]/70">Tap a node to open its source.</p>
-            </>
-          )}
+      {state === 'loading' && (
+        <Center><p className="muted" style={{ margin: 0 }}>Mapping your knowledge…</p></Center>
+      )}
+      {state === 'error' && (
+        <Center>
+          <p className="muted" style={{ margin: 0 }}>
+            Couldn’t load the map.{' '}
+            <button onClick={load} className="chip" style={{ cursor: 'pointer' }}>Retry</button>
+          </p>
+        </Center>
+      )}
+      {state === 'idle' && data && total === 0 && (
+        <Center>
+          <p className="muted" style={{ margin: 0, maxWidth: '30ch', textAlign: 'center' }}>
+            Nothing saved yet. Add a recipe from the Home tab and your map will grow here.
+          </p>
+        </Center>
+      )}
+
+      {state === 'idle' && data && total > 0 && (
+        <div
+          className="glass-2"
+          style={{
+            position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+            bottom: 'calc(92px + env(safe-area-inset-bottom))',
+            display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+            gap: '4px 14px', alignItems: 'center',
+            padding: '8px 16px', borderRadius: 999, maxWidth: 'calc(100% - 28px)',
+            fontSize: 'var(--t-xs)', color: 'var(--color-ink-soft)',
+          }}
+        >
+          <Legend color={COLOR.source} label={`Sources ${data.counts.source}`} ring={ink} />
+          <Legend color={COLOR.recipe} label={`Recipes ${data.counts.recipe}`} />
+          <Legend color={COLOR.technique} label={`Techniques ${data.counts.technique}`} />
+          <Legend color={COLOR.wisdom} label={`Wisdom ${data.counts.wisdom}`} />
+          <button onClick={load} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2, font: 'inherit', padding: 0 }}>
+            Refresh
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-function Legend({ color, label, ring }: { color: string; label: string; ring?: boolean }) {
+function Center({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className="inline-block w-2.5 h-2.5 rounded-full"
-        style={{ background: color, boxShadow: ring ? 'inset 0 0 0 1px #2b2722' : undefined }}
-      />
+    <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 24 }}>
+      {children}
+    </div>
+  );
+}
+
+function Legend({ color, label, ring }: { color: string; label: string; ring?: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+      <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: ring ? `inset 0 0 0 1px ${ring}` : undefined }} />
       {label}
     </span>
   );
